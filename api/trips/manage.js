@@ -15,6 +15,11 @@ export default async function(req,res){
   if(routeId){const r=await db.query("SELECT id FROM routes WHERE id=$1 AND school_id=$2 AND status='active'",[routeId,schoolId]);if(!r.rows.length)return res.status(400).json({error:'Route does not belong to this school or is inactive.'});}
   if(vehicleId){const v=await db.query("SELECT id FROM vehicles WHERE id=$1 AND school_id=$2 AND status='active'",[vehicleId,schoolId]);if(!v.rows.length)return res.status(400).json({error:'Vehicle does not belong to this school or is inactive.'});}
   const driver=check.membership.role==='driver'?await db.query('SELECT id FROM drivers WHERE school_id=$1 AND user_id=$2',[schoolId,uid]):{rows:[]};
+  if(check.membership.role==='driver'){
+   if(!routeId||!vehicleId)return res.status(400).json({error:'Choose your assigned route and vehicle.'});
+   const assignment=await db.query('SELECT id FROM vehicle_assignments WHERE school_id=$1 AND driver_id=$2 AND vehicle_id=$3 AND route_id=$4 AND valid_to IS NULL LIMIT 1',[schoolId,driver.rows[0].id,vehicleId,routeId]);
+   if(!assignment.rows.length)return res.status(403).json({error:'That route and vehicle are not assigned to you.'});
+  }
   const r=await db.query("INSERT INTO trips (school_id,route_id,vehicle_id,driver_id,trip_type,status,started_at) VALUES ($1,$2,$3,$4,$5,'active',now()) RETURNING id,school_id,route_id,vehicle_id,driver_id,trip_type,status,started_at",[schoolId,routeId,vehicleId,driver.rows[0]?.id||null,tripType]);
   await writeAudit({schoolId,actorUserId:uid,action:'trip.started',targetType:'trip',targetId:r.rows[0].id});return res.status(201).json({trip:r.rows[0]});
  }

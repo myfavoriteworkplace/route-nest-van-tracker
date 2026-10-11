@@ -10,7 +10,7 @@ export default async function(req,res){
  const eventId=String(req.headers['x-razorpay-event-id']||''); const eventType=String(event.event||'');
  if(!eventId||!eventType)return res.status(400).json({error:'Missing event identifier or type.'});
  const inserted=await db.query("INSERT INTO webhook_events (provider_event_id,event_type,status) VALUES ($1,$2,'received') ON CONFLICT (provider_event_id) DO NOTHING RETURNING id",[eventId,eventType]);
- if(!inserted.rows.length){const old=await db.query('SELECT status FROM webhook_events WHERE provider_event_id=$1',[eventId]);if(old.rows[0]?.status==='processed'||old.rows[0]?.status==='ignored')return res.json({received:true,duplicate:true});await db.query("UPDATE webhook_events SET status='received',error_summary=NULL WHERE provider_event_id=$1",[eventId]);}
+ if(!inserted.rows.length){const old=await db.query('SELECT status FROM webhook_events WHERE provider_event_id=$1',[eventId]);if(old.rows[0]?.status!=='failed')return res.json({received:true,duplicate:true});await db.query("UPDATE webhook_events SET status='received',error_summary=NULL WHERE provider_event_id=$1",[eventId]);}
  try{
   const entity=event.payload?.subscription?.entity||{}, payment=event.payload?.payment?.entity||{};
   const subscriptionId=String(entity.id||payment.subscription_id||'');

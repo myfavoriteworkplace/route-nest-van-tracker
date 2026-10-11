@@ -5,6 +5,7 @@ export const methods=['GET','PUT'];
 export default async function(req,res){
  const userId=String(req.user.id), email=String(req.user.email||'').trim().toLowerCase();
  if(req.method==='GET'){
+  if(email)await db.query("INSERT INTO user_profiles (user_id,email) VALUES ($1,$2) ON CONFLICT (user_id) DO UPDATE SET email=EXCLUDED.email,updated_at=now()",[userId,email]);
   if(email){
    const invites=await db.query("SELECT id,school_id,role,student_id FROM school_invites WHERE lower(email)=$1 AND status='pending' ORDER BY id ASC LIMIT 25",[email]);
    for(const inv of invites.rows){
