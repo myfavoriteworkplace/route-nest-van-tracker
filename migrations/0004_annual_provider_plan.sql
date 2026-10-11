@@ -1,0 +1,2 @@
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS provider_annual_plan_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plans_provider_annual_plan_id ON plans(provider_annual_plan_id) WHERE provider_annual_plan_id IS NOT NULL;

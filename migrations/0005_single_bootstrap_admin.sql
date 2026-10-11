@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_admin_single_bootstrap ON platform_admins ((true));

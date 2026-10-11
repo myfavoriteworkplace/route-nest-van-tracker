@@ -1,0 +1,23 @@
+[auth]
+enabled = true
+providers = ["email"]
+
+[[secret]]
+name = "PLATFORM_BOOTSTRAP_KEY"
+required = false
+description = "One-time secret used to claim the initial School Van Tracker platform Super Admin account."
+
+[[secret]]
+name = "RAZORPAY_KEY_ID"
+required = false
+description = "Razorpay API key ID for school-level recurring subscriptions."
+
+[[secret]]
+name = "RAZORPAY_KEY_SECRET"
+required = false
+description = "Razorpay API key secret. Used only on the server."
+
+[[secret]]
+name = "RAZORPAY_WEBHOOK_SECRET"
+required = false
+description = "Razorpay webhook signing secret for verifying recurring billing events."
