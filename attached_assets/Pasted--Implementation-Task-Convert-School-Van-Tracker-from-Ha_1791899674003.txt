@@ -1,0 +1,683 @@
+# Implementation Task: Convert School Van Tracker from Hatchable to Render
+
+## 1. Objective
+
+Convert the existing School Van Tracker project into a production-oriented, standard Node.js application deployable on Render.
+
+Repository: `https://github.com/myfavoriteworkplace/route-nest-van-tracker`
+
+Current branch: `main`
+
+Create a new branch named `migration/render-deployment`.
+
+The existing project was built for Hatchable and contains:
+
+- `public/index.html`
+- `public/login.html`
+- `public/app.js`
+- `public/saas.js`
+- `public/saas.css`
+- `public/style.css`
+- `api/` with individual API handler files
+- `lib/tenant.js`
+- `migrations/` containing six SQL migrations
+- `hatchable.toml`
+
+The current project has no `package.json` and no standard Node.js server entry point.
+
+Do not rewrite the application from scratch. Preserve the existing UI, workflows, SQL schema, and business logic wherever possible.
+
+The target stack is:
+
+- Frontend: existing HTML, CSS and JavaScript
+- Backend: Node.js with Express
+- Database: PostgreSQL, preferably Render PostgreSQL
+- Authentication: independent application authentication, not Hatchable authentication
+- Billing: Razorpay subscriptions and verified webhooks
+- Hosting: Render Static Site for the frontend and Render Web Service for the API
+- Source control: existing GitHub repository
+
+## 2. Mandatory discovery phase
+
+Before editing files:
+
+1. Inspect every source file in `api/`, `lib/`, `public/` and `migrations/`.
+2. Read all six SQL migrations in numerical order.
+3. Search the entire repository for:
+   - `from 'hatchable'`
+   - `from "hatchable"`
+   - `window.hatchable`
+   - `hatchable.auth`
+   - `db.query`
+   - `auth.getUser`
+   - `auth.requireUser`
+   - `config.get`
+   - Hatchable-specific request/response methods
+   - Hatchable-only environment or runtime configuration
+4. Build a route inventory mapping every current API file to its URL, HTTP method, request payload, response format, authorization requirement and database operations.
+5. Identify existing authentication assumptions and how the user ID is obtained in each route.
+6. Identify all tenant and school isolation checks.
+7. Record the existing frontend routes, page navigation and API calls.
+8. Inspect all existing database constraints, foreign keys, indexes, unique keys and migration ordering.
+9. Identify which functions are complete and which are placeholders or require external configuration.
+10. Write `docs/migration-inventory.md` documenting the findings before performing large refactors.
+
+Do not infer Hatchable SDK behavior. Use the actual source code and existing platform behavior to identify what must be replaced.
+
+## 3. Target repository structure
+
+Refactor the repository toward the following structure. Retain useful existing filenames where that reduces risk.
+
+```text
+route-nest-van-tracker/
+├── public/
+│   ├── index.html
+│   ├── login.html
+│   ├── app.js
+│   ├── saas.js
+│   ├── saas.css
+│   └── style.css
+├── src/
+│   ├── app.js
+│   ├── server.js
+│   ├── config/
+│   │   └── env.js
+│   ├── db/
+│   │   ├── pool.js
+│   │   └── migrate.js
+│   ├── middleware/
+│   │   ├── authenticate.js
+│   │   ├── authorize.js
+│   │   ├── validate.js
+│   │   └── error-handler.js
+│   ├── routes/
+│   │   ├── me.js
+│   │   ├── schools.js
+│   │   ├── school.js
+│   │   ├── trips.js
+│   │   ├── parent.js
+│   │   ├── platform.js
+│   │   ├── billing.js
+│   │   └── webhooks.js
+│   ├── services/
+│   │   ├── auth-service.js
+│   │   ├── school-service.js
+│   │   ├── trip-service.js
+│   │   ├── attendance-service.js
+│   │   ├── location-service.js
+│   │   └── billing-service.js
+│   └── repositories/
+│       └── repositories as justified by existing data access
+├── lib/
+│   └── tenant.js
+├── migrations/
+│   └── existing SQL migrations
+├── scripts/
+│   └── migrate.js
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── security/
+├── docs/
+│   └── migration-inventory.md
+├── .env.example
+├── .gitignore
+├── package.json
+├── package-lock.json
+├── render.yaml
+└── README.md
+```
+
+This is the target organization, not a requirement to create empty modules. Implement only useful modules and preserve existing business rules.
+
+If using a simpler route structure provides a safer migration, document the deviation.
+
+## 4. Create a real Node.js application
+
+Create `package.json` with:
+
+- A stable Node.js engine version supported by Render.
+- `start` script for the production server.
+- `dev` script for local development.
+- `test` script.
+- `db:migrate` script.
+- Express and the required PostgreSQL, session, authentication, validation, security and test dependencies.
+
+Choose compatible, maintained dependency versions and commit the generated lockfile.
+
+Use Express as the HTTP server. The server must:
+
+- Bind to `0.0.0.0`.
+- Listen on `process.env.PORT`.
+- Use `process.env.NODE_ENV` for environment-specific settings.
+- Register request parsing, security middleware, session handling, API routes and centralized error handling.
+- Serve static files only if a combined deployment is deliberately selected. The preferred deployment is a separate frontend Static Site and backend Web Service.
+- Expose `GET /health` for Render health checks.
+- Expose `GET /api/health` for API diagnostics if needed.
+- Return meaningful HTTP status codes and consistent JSON errors.
+- Never expose stack traces, credentials or database details in production responses.
+
+The health endpoint should verify application readiness and, where appropriate, database connectivity. Do not report healthy if the application cannot perform its required database operations.
+
+## 5. Replace Hatchable database access
+
+Replace Hatchable database imports with a shared PostgreSQL connection pool using the `pg` package.
+
+Requirements:
+
+- Connect using `DATABASE_URL`.
+- Use parameterized SQL queries.
+- Configure connection timeouts and sensible pool limits.
+- Handle connection failures without crashing on ordinary transient request errors.
+- Close the pool gracefully on process termination.
+- Keep SQL data access separate from HTTP response logic where practical.
+- Do not introduce an ORM merely to perform this migration.
+- Preserve existing SQL statements and business rules where possible.
+- Never use an in-memory array or local JSON file as a substitute for persistent application data.
+
+### Migration handling
+
+Review these files in order:
+
+- `migrations/0001_commercial_saas.sql`
+- `migrations/0002_billing_provider.sql`
+- `migrations/0003_school_invites.sql`
+- `migrations/0004_annual_provider_plan.sql`
+- `migrations/0005_single_bootstrap_admin.sql`
+- `migrations/0006_profile_email.sql`
+
+Implement a migration runner that:
+
+1. Connects to PostgreSQL.
+2. Creates a schema-migration tracking table.
+3. Applies unapplied migrations in deterministic order.
+4. Records successful migration versions.
+5. Uses a transaction per migration where supported.
+6. Stops deployment or startup with a clear error if a migration fails.
+7. Never re-applies an already successful migration.
+8. Never drops production tables or resets production data automatically.
+
+Check the SQL for Hatchable-specific assumptions before running it on Render PostgreSQL.
+
+Do not apply destructive changes to an existing database without an explicit backup and migration plan.
+
+## 6. Replace Hatchable authentication
+
+This is a critical migration.
+
+The current frontend uses `window.hatchable.auth.getSession()` and `window.hatchable.auth.signOut()`. Replace these with an independent authentication system.
+
+Prefer secure, server-managed sessions using an established session library and PostgreSQL-backed session storage. Do not use an in-memory session store in production.
+
+Implement:
+
+- Email-based login compatible with the existing user experience.
+- A secure mechanism for issuing and verifying one-time email codes or login links.
+- Expiration and single-use enforcement for codes.
+- Rate limiting on login and verification endpoints.
+- Generic responses that do not reveal whether an email exists.
+- Secure session creation and destruction.
+- Session regeneration after authentication.
+- HttpOnly cookies.
+- Secure cookies in production.
+- Appropriate SameSite policy.
+- CSRF protection for state-changing requests when cookie-based authentication is used.
+- Session expiry and logout.
+- Authorization checks on every protected API request.
+
+If an email provider is needed, implement a provider adapter and configure a real provider using environment variables. Local development may use a clearly separated development-only mail transport.
+
+Never log real login codes, passwords, session cookies or tokens in production.
+
+### User and role model
+
+Preserve the current roles and role-specific experiences:
+
+- Platform Super Admin
+- School Admin
+- Driver
+- Parent/guardian
+
+Use the existing database model as the source of truth where possible. If the current model relies on Hatchable-managed user identities, design a migration for application-owned identities and profile mappings.
+
+Do not assume a Hatchable user ID is interchangeable with a new identity-provider user ID.
+
+Document the mapping and migration strategy. Do not grant administrative roles merely because someone registers with a particular email address.
+
+### Bootstrap Super Admin
+
+Preserve the intended one-time Super Admin bootstrap flow, but implement it independently.
+
+- Read the bootstrap secret from `PLATFORM_BOOTSTRAP_KEY`.
+- Require an authenticated, eligible account.
+- Enforce one-time use atomically in the database.
+- Prevent concurrent requests from creating multiple Super Admin accounts.
+- Do not return the secret to the browser.
+- Provide a documented secure procedure to rotate or disable the bootstrap secret after initial setup.
+
+Do not weaken bootstrap authorization to simplify testing.
+
+## 7. Convert every existing API handler
+
+Convert the current Hatchable handlers to Express-compatible route handlers and services.
+
+Preserve URL compatibility with the existing frontend where practical.
+
+### Identity
+
+- `GET /api/me`
+
+Return the authenticated user's profile, platform-admin status, school memberships and role-appropriate context.
+
+Unauthenticated requests must return `401`, not fabricated demo-user data.
+
+### School administration
+
+- `POST /api/schools/create`
+- `GET /api/school/data`
+- `POST /api/school/data`
+- `GET /api/school/invite`
+- `POST /api/school/invite`
+- `GET /api/school/attendance`
+
+Preserve existing behavior for school creation, vehicles, routes, students, driver/vehicle/route assignments, invitations and attendance history.
+
+Validate every input server-side.
+
+Every school-scoped query must enforce membership and role permissions on the server. Never trust `school_id` from the browser as proof of authorization.
+
+### Trips and attendance
+
+- `POST /api/trips/manage`
+- `POST /api/trips/location`
+- `POST /api/trips/attendance`
+
+Preserve trip start/end operations, location updates and attendance events.
+
+Enforce:
+
+- The authenticated driver is assigned to the relevant school and trip.
+- The trip belongs to the selected school.
+- A trip cannot receive GPS updates after it has ended.
+- Attendance can only be recorded by authorized users.
+- Boarding, drop-off and absence events follow the existing business rules.
+- Duplicate or invalid transitions are rejected or handled idempotently.
+- GPS coordinates, timestamps and accuracy values are validated.
+- Rate limits prevent abusive location submissions.
+
+Use database transactions where related writes must succeed or fail together.
+
+### Parent location
+
+- `GET /api/parent/location`
+
+Preserve the current parent-location behavior while enforcing verified guardian-to-student relationships.
+
+A parent must never be able to obtain another school's or another family's location by changing a URL parameter.
+
+Return the latest authorized location and a clear stale-location indicator.
+
+### Platform administration
+
+- `GET /api/platform/overview`
+- `POST /api/platform/school-status`
+- `POST /api/platform/billing-plan`
+- `POST /api/platform/bootstrap`
+
+Only authorized platform administrators may access or mutate platform-wide information.
+
+Do not expose other schools' student details or operational data to ordinary school administrators.
+
+### Billing
+
+- `POST /api/billing/checkout`
+- `POST /api/webhooks/razorpay`
+
+Preserve the existing school-level subscription model: one subscription per school, not per student, parent or driver.
+
+Use the existing billing-related schema and adapt it only when necessary.
+
+### Route conversion checklist
+
+For every route:
+
+1. Preserve the URL and HTTP method where possible.
+2. Preserve the request and response contract unless a documented change is required.
+3. Add authentication and role checks.
+4. Add tenant isolation checks.
+5. Validate all user input.
+6. Use parameterized SQL.
+7. Return appropriate HTTP status codes.
+8. Add tests for success, invalid input, unauthenticated access and cross-tenant access.
+9. Update the frontend only when required.
+10. Document the completed route in `docs/migration-inventory.md`.
+
+Do not leave any route pointing to the Hatchable runtime.
+
+## 8. Preserve tenant isolation
+
+Treat tenant isolation as a security requirement, not a frontend feature.
+
+Create shared authorization helpers for:
+
+- Requiring an authenticated user.
+- Requiring a platform Super Admin.
+- Requiring a specific school role.
+- Verifying school membership.
+- Verifying driver assignment to a trip.
+- Verifying a parent-to-student relationship.
+
+The database must remain the authority for permissions.
+
+For each request, derive the user's identity from the verified session, retrieve the relevant membership from the database and verify access to the requested resource.
+
+Never rely solely on:
+
+- `school_id` in a request body.
+- Query parameters.
+- Hidden buttons or navigation items.
+- User-editable role fields.
+- Data stored in browser local storage.
+
+Add automated security tests that attempt to read and mutate School B's data while authenticated only as a School A user.
+
+## 9. Replace the Hatchable frontend integration
+
+The current `public/saas.js` depends on Hatchable authentication and calls the existing API endpoints.
+
+Preserve the existing visual design and navigation, but remove the dependency on `window.hatchable`.
+
+Create a small frontend API client that:
+
+- Uses a configurable API base URL.
+- Sends cookies using `credentials: 'include'` when cookie-based sessions are used.
+- Handles `401`, `403`, validation errors and server errors.
+- Uses a consistent JSON request/response contract.
+- Avoids exposing server-side secrets.
+- Redirects unauthenticated users to the independent login page.
+- Uses the backend logout endpoint.
+- Does not silently substitute demo data if the API fails.
+
+Use an appropriate frontend configuration mechanism for a static site. Because static assets are built or published separately, do not assume Render runtime environment variables automatically rewrite ordinary JavaScript files. Either inject safe public configuration at build time or use a runtime configuration endpoint.
+
+Never place `DATABASE_URL`, Razorpay secrets, session secrets or bootstrap secrets in public JavaScript.
+
+### Preserve the UI
+
+Keep the existing:
+
+- Login page and dashboard styling.
+- Platform Super Admin workspace.
+- School Admin workspace.
+- Driver trip controls.
+- Parent location view.
+- School, vehicle, route and student management.
+- Attendance interface.
+- Invitation and assignment flows.
+- Subscription billing interface.
+- Responsive mobile layout.
+
+Remove any stale Hatchable-specific UI messages and update error messages to reflect the independent authentication service.
+
+Do not redesign or remove features unless the existing implementation is broken or insecure. Document any such changes.
+
+## 10. Implement Razorpay correctly
+
+The existing project includes Razorpay-related configuration and billing routes. Treat the integration as incomplete until it has been tested against real provider behavior.
+
+Implement:
+
+- Server-side checkout creation.
+- Monthly and annual school subscription plans.
+- Server-side verification of checkout results.
+- Signature verification for webhooks using the raw request body as required by Razorpay.
+- Idempotent webhook processing.
+- Subscription status updates from verified provider events.
+- Persistence of provider subscription and payment identifiers.
+- Handling of successful payments, failed payments, cancellations and renewals.
+- A clear billing status in the school dashboard.
+- A test-mode setup and verification guide.
+
+Use these environment variables:
+
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_WEBHOOK_SECRET`
+
+Keep credentials on the backend only.
+
+Validate that provider plan IDs and prices match the configured monthly and annual amounts. Do not mark a subscription active merely because the frontend redirects back from checkout.
+
+If credentials or provider plan IDs are absent, show a clear configuration error and disable checkout. Do not simulate a successful payment.
+
+Document the exact Razorpay dashboard setup needed for plans and webhook URLs.
+
+## 11. Environment configuration
+
+Create `.env.example` with placeholders only.
+
+At minimum, consider:
+
+- `NODE_ENV`
+- `PORT`
+- `DATABASE_URL`
+- `SESSION_SECRET`
+- `FRONTEND_URL`
+- `API_BASE_URL` if required by the selected architecture
+- `PLATFORM_BOOTSTRAP_KEY`
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_WEBHOOK_SECRET`
+- Email-provider configuration required by the selected authentication implementation
+
+Validate required variables at startup and fail with clear messages when mandatory configuration is missing.
+
+Do not commit a real `.env` file.
+
+Ensure `.gitignore` excludes `.env`, `.env.*` files except `.env.example`, `node_modules`, coverage output, logs, temporary files and local database dumps.
+
+Never print secret values to logs.
+
+## 12. Render deployment configuration
+
+Create a `render.yaml` Blueprint where supported and useful.
+
+Prefer the following deployment arrangement:
+
+### Backend
+
+- Type: Node.js Web Service.
+- Repository: existing GitHub repository.
+- Branch: `migration/render-deployment` during validation, then `main` after approval.
+- Build command: `npm ci`
+- Start command: `npm start`
+- Health check path: `/health`
+- Environment: production.
+- Database URL: supplied from the Render PostgreSQL connection string.
+- Secrets: set securely through Render environment configuration.
+
+### Frontend
+
+- Type: Render Static Site.
+- Publish directory: `public`
+- No build command is required if the application remains plain static HTML/CSS/JavaScript.
+- Configure its public API URL through the selected frontend configuration strategy.
+- Configure any required SPA fallback only if compatible with the existing page routes.
+
+### Database
+
+Use a Render PostgreSQL database.
+
+Keep the database and backend in the same Render region where practical.
+
+Run migrations through an explicit deployment or release step. Do not run unsafe schema resets at startup.
+
+If using a Render Blueprint, define the services and database with the correct supported Blueprint syntax and verify that the configuration can be parsed.
+
+If the frontend and backend use separate origins, configure CORS to allow only the intended frontend origin, with credentials enabled only where required. Never combine wildcard origins with credentialed requests.
+
+Verify cookie behavior in the actual production domains. If the chosen deployment requires cross-site cookies, configure Secure and SameSite correctly and implement CSRF protection.
+
+## 13. Database migration and existing data
+
+The first deployment may use a new Render database. Do not assume the Hatchable database automatically transfers.
+
+Document two separate procedures:
+
+1. Fresh installation: create the database and apply all migrations.
+2. Existing data migration: export permitted source data, map identity IDs, import data, validate row counts and relationships, and perform a controlled cutover.
+
+Do not migrate passwords, session secrets or provider credentials as ordinary data.
+
+Do not delete or modify the existing Hatchable project or database during this migration.
+
+Before a production cutover:
+
+- Take a recoverable backup.
+- Validate schema compatibility.
+- Validate student, school, membership, trip, attendance and billing relationships.
+- Verify data counts and key constraints.
+- Have a rollback plan.
+
+If access to the Hatchable database is unavailable, state that a production data migration cannot yet be completed. Do not claim existing data has been migrated.
+
+## 14. Automated tests
+
+Use a maintained test runner and HTTP test tooling suitable for Express.
+
+Add tests for:
+
+### Server
+
+- Server starts with valid configuration.
+- Missing mandatory configuration fails clearly.
+- `/health` responds successfully when the service is ready.
+- Unknown routes return the intended error.
+- Unhandled errors do not expose stack traces.
+
+### Authentication
+
+- Successful login.
+- Invalid and expired login code.
+- Reuse of a consumed code.
+- Logout invalidates the session.
+- Protected endpoints reject anonymous requests.
+- Rate limits work.
+
+### Tenant and role security
+
+- School Admin can access their own school.
+- School Admin cannot read or modify another school.
+- Driver can update only authorized active trips.
+- Parent can access only linked students.
+- Non-admin users cannot access platform endpoints.
+- Bootstrap cannot be claimed twice.
+
+### Business logic
+
+- Create school, route, vehicle and student.
+- Create invitations and assignments.
+- Start and end trips.
+- Submit valid and invalid GPS updates.
+- Record boarding, drop-off and absence.
+- Retrieve attendance history.
+- Retrieve the authorized parent's location.
+- Create checkout requests.
+- Reject invalid webhook signatures.
+- Process duplicate webhook events idempotently.
+
+Use an isolated test database. Never run tests that mutate production data.
+
+## 15. Manual end-to-end acceptance tests
+
+Provide a repeatable checklist and run it locally or in a staging environment.
+
+1. Create or bootstrap the first Super Admin.
+2. Sign in and sign out.
+3. Create a school.
+4. Verify that the creator receives the intended School Admin role.
+5. Create a vehicle, route and student.
+6. Invite a driver and a parent using the expected authentication flow.
+7. Verify invitations and assignments.
+8. Sign in as the driver.
+9. Start a trip and grant location permission.
+10. Confirm that location updates are stored in PostgreSQL.
+11. End the trip and verify that GPS updates stop.
+12. Record boarding and drop-off events.
+13. Sign in as the linked parent.
+14. Verify access to the correct child's location.
+15. Confirm that another parent cannot retrieve that child's location.
+16. Verify the school dashboard and attendance history.
+17. Test platform-level school status management.
+18. Test billing in Razorpay test mode.
+19. Send valid and invalid webhook requests.
+20. Verify mobile layout and all navigation links.
+21. Verify all critical flows after refreshing the page.
+22. Verify that the app remains functional after a backend restart.
+
+Do not claim the application is production-ready until critical end-to-end and security tests pass.
+
+## 16. Documentation
+
+Update `README.md` with:
+
+- Architecture overview.
+- Prerequisites.
+- Local installation.
+- Environment variable setup.
+- Database creation and migration.
+- Development commands.
+- Test commands.
+- Render deployment instructions.
+- Static frontend configuration.
+- Email authentication provider setup.
+- Razorpay test-mode and production setup.
+- Data migration and backup guidance.
+- Known limitations.
+- Troubleshooting steps.
+
+Document any features that still require external configuration or are not yet fully functional.
+
+## 17. Deliverables
+
+The task is complete only when the agent provides:
+
+1. A working `package.json` and lockfile.
+2. A standard Node.js server entry point.
+3. Converted API routes with no runtime dependence on Hatchable.
+4. A working PostgreSQL adapter and migration runner.
+5. Independent authentication and secure session handling.
+6. Preserved tenant and role authorization.
+7. Updated frontend authentication and API configuration.
+8. Razorpay integration with signature verification and idempotent webhook handling.
+9. `.env.example` and `.gitignore`.
+10. Render deployment configuration.
+11. Automated tests and results.
+12. Manual end-to-end test results.
+13. Updated deployment documentation.
+14. A list of changed files and key implementation decisions.
+15. A list of incomplete features, risks and required external credentials.
+16. A Git commit on `migration/render-deployment`.
+17. Exact Render setup instructions, including environment variables and database migration steps.
+
+Do not merge into `main` or deploy to production without explicit approval.
+
+## 18. Definition of done
+
+The migration is accepted when:
+
+- `npm ci` succeeds from the repository root.
+- `npm test` runs successfully.
+- The backend starts with the documented configuration.
+- The health endpoint passes.
+- Every frontend API call targets the new backend.
+- No required route imports the Hatchable SDK.
+- No frontend code depends on `window.hatchable`.
+- All critical user journeys work with persistent PostgreSQL data.
+- Authentication and tenant isolation tests pass.
+- Razorpay webhook signatures are verified.
+- No secrets are exposed in the browser or Git history.
+- The application deploys successfully to Render staging.
+- All remaining limitations are documented honestly.
+
+Begin by inspecting and documenting the existing implementation. Then implement the migration in small, reviewable stages, run tests after each stage, and report evidence rather than assuming success.

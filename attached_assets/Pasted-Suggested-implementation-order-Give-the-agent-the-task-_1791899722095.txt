@@ -1,0 +1,75 @@
+Suggested implementation order
+Give the agent the task above, but have it follow this sequence so it does not try to convert everything at once.
+
+Phase 1 — Audit the existing code
+Foundation
+Inventory routes, database operations, authentication, UI dependencies and existing feature gaps. No major refactoring yet.
+
+
+
+
+Phase 2 — Establish the backend
+Add package.json, Express, PostgreSQL connectivity, health checks, logging and migration support. Verify local startup.
+
+
+
+
+Phase 3 — Authentication and authorization
+Replace Hatchable auth, implement sessions, user identity mapping, roles and school isolation. Test security before migrating the rest.
+
+
+
+
+Phase 4 — Convert the APIs
+Convert school management, invitations, trips, GPS, attendance, parent location, Super Admin and billing routes. Test each endpoint.
+
+
+
+
+Phase 5 — Connect the existing frontend
+Replace window.hatchable.auth, configure the API base URL, verify cookies and CORS, and retain the current responsive UI.
+
+
+
+
+Phase 6 — Billing and integration tests
+Verify Razorpay checkout, signature validation, duplicate webhooks, subscription status transitions and failure cases.
+
+
+
+
+Phase 7 — Render staging deployment
+Deploy the database, backend and frontend, configure environment variables, run migrations and execute the full acceptance checklist.
+
+
+
+4. Important technical decisions
+A. Deploy the frontend and backend separately
+This matches your current static HTML/JavaScript frontend and API-based backend. Render supports both static sites and Node.js web services. 
+
+Render Docs
++2
+
+
+
+Use the following settings after the code conversion is complete:
+Setting	Backend Web Service	Frontend Static Site
+Repository	Same GitHub repository	Same GitHub repository
+Branch during migration	migration/render-deployment	migration/render-deployment
+Root directory	Repository root	Repository root
+Build command	npm ci	Empty if no build is required
+Start command	npm start	Not applicable
+Publish directory	Not applicable	public
+Health check	/health	Not applicable
+Don't create the Render services against the unconverted project and expect them to work. First get the new backend running locally.
+B. Keep the frontend configuration safe
+Because the frontend is a static site, a backend URL placed directly in the JavaScript source is a public value. That is acceptable for an API URL, but never for credentials.
+The agent should support an API base URL such as:
+https://your-backend-service.onrender.com
+Use a configuration mechanism that works with static assets, and configure CORS to allow the actual frontend origin.
+C. Do not skip the authentication migration
+The existing dashboard calls Hatchable's authentication API. Even if the homepage loads successfully on Render, login and protected pages will fail until that dependency is removed and replaced. This is a core migration task, not a final cosmetic fix.
+D. Don't automatically migrate production data
+First deploy a clean staging database and test all migrations. Moving existing users and data requires a separate, verified migration procedure, particularly if identity IDs are managed by Hatchable. Keep the Hatchable app and its data intact until the new deployment has been validated.
+E. Treat background GPS as a separate product requirement
+The current browser-based GPS approach is designed for foreground tracking. A successful Render deployment does not guarantee reliable location reporting while an Android phone is locked or the browser is suspended. Test this on real driver devices before promising continuous tracking.
