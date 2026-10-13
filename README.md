@@ -1,19 +1,47 @@
 # School Van Tracker
 
-[![Deploy to Hatchable](https://hatchable.com/deploy-button.svg)](https://hatchable.com/deploy?repo=https://github.com/myfavoriteworkplace/route-nest-van-tracker)
+A parent and school dashboard for school-van location, arrival alerts, and
+student attendance. This repository is being migrated from Hatchable to a
+standard Node.js/Express and PostgreSQL application for Render.
 
-A parent and school dashboard for school van live location, arrival alerts, and student attendance. Includes demo data and responsive mobile-first UI.
+## Current migration status
 
-This folder is a complete Hatchable project. Everything the app needs is in these files: pages, API routes, database migrations, seed data, and the hatchable.toml manifest that declares the services and keys it uses.
+The Express server, PostgreSQL connection pool, readiness endpoints, and
+versioned SQL migration runner are in place. Existing Hatchable login and API
+handlers have **not** been migrated yet. The app is not ready for a production
+cutover or deployment.
 
-## Run your own copy
+See:
 
-1. Go to https://hatchable.com/deploy
-2. Bring this folder as a .zip, or point the importer at a Git repository that contains it
-3. Your copy gets its own database, its own URL, and connects to your own keys
+- [Hatchable-to-Render migration plan](docs/hatchable-to-render-migration.md)
+- [Source audit and route/schema inventory](docs/migration-inventory.md)
 
-## About Hatchable
+## Local development
 
-Hatchable is where AI-built apps go live. Connect the AI you already use and it can build, deploy, and run apps like this one for you.
+Requirements: Node.js 20 and a PostgreSQL database.
 
-Built on Hatchable. https://hatchable.com
+1. Install dependencies with `npm install`.
+2. For local development outside Replit, copy `.env.example` to `.env` and set
+   `DATABASE_URL` to a development PostgreSQL database. Keep real credentials
+   out of source control.
+3. Apply the existing schema with `npm run db:migrate`.
+4. Start the app with `npm run dev` (or `npm start`).
+5. Run the automated checks with `npm test`.
+
+**Database safety:** This Replit workspace has its own managed development
+database in `DATABASE_URL`; it is not the Render target. Before running
+`npm run db:migrate`, explicitly configure the connection to a disposable
+external PostgreSQL database. Do not use the Hatchable or production database.
+
+The server listens on `0.0.0.0` and uses `PORT` when supplied, defaulting to
+5000. `GET /health` and `GET /api/health` return `503` until PostgreSQL is
+reachable. The migration command only applies unapplied files in `migrations/`;
+it does not reset or delete data.
+
+## Important migration boundaries
+
+- Existing `api/` handlers and browser authentication still depend on Hatchable.
+- No Render database has been configured or migrated by this code.
+- Do not point the migration runner at the current Hatchable production database
+  or a Render production database until the migration and data-transfer plan is
+  reviewed and explicitly approved.

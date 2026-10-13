@@ -10,6 +10,12 @@ has been independently verified against a live Hatchable deployment. Where a
 platform behavior is not implemented in this repository, it is marked as
 unknown and must be confirmed rather than assumed.
 
+**Snapshot timing:** This inventory records the imported Hatchable source
+before the Phase 2 server foundation was added. Statements below about the
+absence of a package manifest, server, or migration runner describe that
+original audit baseline. For current migration progress, see the
+[migration plan](hatchable-to-render-migration.md).
+
 ## Repository and runtime shape
 
 - `api/` contains 15 JavaScript handler files. They export `methods` arrays

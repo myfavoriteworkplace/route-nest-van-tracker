@@ -13,7 +13,37 @@ Hatchable with explicit application-owned services. Do not rewrite the product
 from scratch, deploy the current unconverted source as if it were ready, or
 modify/delete the existing Hatchable project or its data.
 
-### Known starting point
+### Current progress — 2026-10-13
+
+- **Phase 1 (source audit): complete.** See
+  [`migration-inventory.md`](migration-inventory.md) for the original API,
+  authentication, frontend, and schema inventory.
+- **Phase 2 (Node.js/PostgreSQL foundation): implemented and locally checked.**
+  The repository now has a Node 20 package manifest and lockfile, an Express
+  server, bounded `pg` pool, readiness endpoints, static-file hosting, and an
+  explicit transactional migration runner with a migration ledger, checksums,
+  and an advisory lock. Automated checks currently pass (6 tests).
+- The workspace's preconfigured **Replit development PostgreSQL** answered a
+  read-only `SELECT 1` readiness check. It is not the intended Render database;
+  no schema migrations were run against it.
+- **Still blocked on target configuration:** a Render PostgreSQL instance and
+  its `DATABASE_URL` have not been supplied. Therefore the existing six SQL
+  migrations have not been applied or verified against the intended Render
+  database.
+- The generated package lock currently contains Replit package-firewall
+  download URLs. A clean dependency install on Render has not been tested; make
+  the lock/build configuration portable before treating a Render build as
+  verified.
+- The existing login contains inline JavaScript, so Helmet's Content Security
+  Policy is temporarily disabled while its other default security headers are
+  enabled. Revisit the policy after replacing Hatchable auth. The current
+  static UI and API are same-origin; configure a narrow CORS allowlist if they
+  are split into separate Render services.
+- The Hatchable authentication flow and business API handlers remain
+  Hatchable-dependent. This foundation does not make sign-in or protected
+  dashboard workflows Render-ready, and no Render deployment has been created.
+
+### Imported repository baseline
 
 The imported repository currently contains:
 
@@ -25,12 +55,12 @@ The imported repository currently contains:
 - `hatchable.toml`: Hatchable auth and secret declarations.
 - `README.md`: Hatchable-oriented project instructions.
 
-There is currently no root `package.json` or conventional Node.js server entry
-point. The API is therefore not yet a standard Express service that can be
-started with `npm start`. The source-level assumptions, exact API contracts,
-SQL constraints, existing data availability, and completeness of provider
-integrations still need to be established by the discovery phase below. Do not
-infer undocumented Hatchable SDK behavior.
+At the start of the source audit, there was no root `package.json` or
+conventional Node.js server entry point. Phase 2 has since added the Node.js
+and Express foundation described in the current-progress section. The source
+audit establishes the repository contracts and schema but does not verify
+undocumented Hatchable runtime behavior, existing production data, or provider
+configuration.
 
 ### Intended deployment shape
 
@@ -104,6 +134,9 @@ investigated, not silently guessed.
 inventory exposes the current identity model, route contracts, schema
 relationships, and tenant checks.
 
+**Status:** Complete. `docs/migration-inventory.md` records the source audit;
+the audit is a repository inspection and not a live Hatchable runtime test.
+
 ## Phase 2 — Establish the Node.js and PostgreSQL foundation
 
 **Goal:** Make a small, observable Express application with persistent
@@ -146,6 +179,14 @@ PostgreSQL access and safe schema migrations.
 be reached, migrations run against a disposable database, and `/health`
 reflects readiness. A missing required variable fails clearly without printing
 its value.
+
+**Implementation update:** The local application and unit checks are in place.
+`npm test` passes 6 tests, the server starts on `0.0.0.0:$PORT`, and the
+workspace PostgreSQL readiness query succeeded. That connection is the
+Replit-managed development database, not Render PostgreSQL, and it was only
+used for `SELECT 1`. The six project migrations were not run. The Phase 2 gate
+remains open until the runner is validated against a disposable PostgreSQL
+database and the intended Render database is explicitly configured.
 
 ## Phase 3 — Independent identity, sessions, and authorization
 
