@@ -1,7 +1,6 @@
 (function () {
   "use strict";
 
-  const apiBase = String(window.RouteNestConfig?.apiBaseUrl || "").replace(/\/+$/, "");
   const form = document.getElementById("authForm");
   const email = document.getElementById("authEmail");
   const code = document.getElementById("authCode");
@@ -12,7 +11,6 @@
   const title = document.getElementById("authTitle");
   const subtitle = document.getElementById("authSubtitle");
   let step = "email";
-  let csrfToken = "";
 
   function say(text, isError) {
     message.textContent = text || "";
@@ -20,44 +18,17 @@
   }
 
   async function loadCsrf() {
-    const response = await fetch(`${apiBase}/api/auth/csrf`, {
-      credentials: "include",
-      cache: "no-store",
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.csrfToken) {
-      throw new Error(payload.error || "Sign-in is not available right now. Please try again.");
-    }
-    csrfToken = payload.csrfToken;
+    await window.RouteNestApi.refreshCsrf();
   }
 
-  async function request(path, method, body) {
-    if (!csrfToken) await loadCsrf();
-    const response = await fetch(`${apiBase}${path}`, {
-      method,
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": csrfToken,
-      },
-      body: JSON.stringify(body),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload.error || "Could not complete sign-in. Please try again.");
-    }
-    return payload;
-  }
+  const request = (path, method, body) =>
+    window.RouteNestApi.request(path, method, body);
 
   async function initialize() {
     try {
       await loadCsrf();
-      const response = await fetch(`${apiBase}/api/auth/session`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const session = await response.json();
-      if (response.ok && session.user) window.location.replace("/");
+      const session = await window.RouteNestApi.getSession();
+      if (session.user) window.location.replace("/");
     } catch {
       say("Sign-in is not available right now. Check the service configuration and try again.", true);
       submit.disabled = true;

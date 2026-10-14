@@ -1,2 +1,3 @@
 - [Temporary PostgreSQL checks](temporary-postgres-checks.md) — use a cluster-local socket directory; this runtime lacks the default `/run/postgresql`.
 - [Portable npm lockfiles](portable-npm-lockfiles.md) — keep Render-bound lockfiles on public registry URLs and verify with a clean install.
+- [Python tool auto-configuration](python-auto-configuration.md) — invoking Python can add a Python module to `.replit`; verify workspace config afterward.

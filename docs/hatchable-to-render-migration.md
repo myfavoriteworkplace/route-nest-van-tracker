@@ -17,36 +17,41 @@ modify/delete the existing Hatchable project or its data.
 
 - **Phase 1 (source audit): complete.** See
   [`migration-inventory.md`](migration-inventory.md) for the original API,
-  authentication, frontend, and schema inventory.
-- **Phase 2 (Node.js/PostgreSQL foundation): implemented and locally validated.**
-  The repository now has a Node 20 package manifest and lockfile, an Express
-  server, bounded `pg` pool, readiness endpoints, static-file hosting, and an
-  explicit transactional migration runner with a migration ledger, checksums,
-  and an advisory lock. `npm ci` succeeds in this Replit workspace and all six
-  automated tests pass. On a fresh temporary local PostgreSQL instance, all
-  seven migrations applied in order; a second run applied none.
-- The workspace's preconfigured **Replit development PostgreSQL** answered a
-  read-only `SELECT 1` readiness check. It is not the intended Render database;
-  no schema migrations were run against it. The Replit app's `/health` endpoint
-  also returned ready. The same endpoint returned ready when the app used the
-  temporary local PostgreSQL instance.
-- **Still blocked on target configuration:** a Render PostgreSQL instance and
-  its `DATABASE_URL` have not been supplied. The seven current migrations have
-  not been applied or verified against the intended Render database.
-- The lockfile now uses public npm registry tarball URLs rather than
-  Replit-internal package-firewall URLs, and `npm ci` succeeds in this workspace.
-  A clean Render build has not yet been run.
-- Migration 0007 and independent email-auth modules have been added, but the
-  Express app does not mount the auth routes or configure sessions, and the
-  Hatchable-backed login and business API have not been converted.
-- The existing login contains inline JavaScript, so Helmet's Content Security
-  Policy is temporarily disabled while its other default security headers are
-  enabled. Revisit the policy after replacing Hatchable auth. The current
-  static UI and API are same-origin; configure a narrow CORS allowlist if they
-  are split into separate Render services.
-- The Hatchable authentication flow and business API handlers remain
-  Hatchable-dependent. This foundation does not make sign-in or protected
-  dashboard workflows Render-ready, and no Render deployment has been created.
+  authentication, frontend, and schema inventory. It records repository
+  behavior, not behavior independently confirmed on a live Hatchable service.
+- **Phase 2 (Node.js/PostgreSQL foundation): implemented.** The repository has
+  a Node 20 package manifest, Express server, bounded PostgreSQL pool,
+  readiness endpoints, and a checksummed, transactional migration runner. The
+  repository now contains migrations `0001`–`0008`. All eight have been
+  applied to a temporary local PostgreSQL database; a repeat run applied none.
+- **Phase 3 (independent authentication): backend and frontend wiring are
+  implemented.** The Express app mounts PostgreSQL-backed sessions, email-code
+  auth routes, and CSRF protection. The login page and dashboard use the
+  application session; dashboard writes include the CSRF token. Production
+  email delivery still requires Resend configuration and end-to-end testing.
+- **Phase 4 (business API): converted in code.** API modules are mounted by
+  Express and use the application session identity and PostgreSQL helpers.
+  Automated authorization and contract tests remain incomplete.
+- **Phase 5 (frontend): connected in code.** The shared browser API client uses
+  the configured API origin, includes cookies, and handles CSRF tokens. The
+  Render static-site configuration rewrites `/login` to `login.html`; deployed
+  cookie and layout behavior still needs staging verification.
+- **Phase 6 (Razorpay): integration code is present, not provider-verified.**
+  Checkout, server-side verification, signed webhooks, and event idempotency
+  are implemented. Merchant test credentials, configured plans, and end-to-end
+  payment tests are still required.
+- **Phase 7 (Render configuration): blueprint and operator guide are present.**
+  `render.yaml` defines the backend and static frontend on development branch
+  `van-tracker`. A staging PostgreSQL database is deliberately not provisioned
+  automatically; no Render services or database have been created or deployed.
+- **Current workspace verification:** `npm ci`, all 10 automated tests, and
+  `npm run build:static` pass. The Replit development database returns ready
+  from `/health`, but `/api/auth/csrf` returns a database missing-relation
+  error because its application schema has not been applied. No migrations
+  were run against that managed database; use a disposable database for local
+  app verification or a separately provisioned Render staging database.
+- No production data has been exported or moved. Any Hatchable data transfer
+  remains a separate, approval-gated operation.
 
 ### Imported repository baseline
 
@@ -190,17 +195,13 @@ be reached, migrations run against a disposable database, and `/health`
 reflects readiness. A missing required variable fails clearly without printing
 its value.
 
-**Implementation update (2026-10-14):** The lockfile uses public npm registry
-URLs, `npm ci` succeeds in the Replit workspace, and `npm test` passes all 6
-tests. Against a newly initialized,
-temporary local PostgreSQL instance, `npm run db:migrate` applied all 7 current
-migrations in order; a second run applied 0, and the ledger contained all 7.
-The Replit app's `/health` endpoint returned ready using the existing
-Replit-managed development database; no schema migrations were run against that
-database. `/health` also returned ready against the temporary local PostgreSQL
-instance. The local disposable-database gate is now validated. Render staging
-remains unconfigured, and a clean install/build on Render has not yet been
-tested, so staging verification remains open.
+**Validation update (2026-10-14):** `npm ci`, `npm test` (10 tests), and
+`npm run build:static` pass in the current workspace. A disposable local
+PostgreSQL database accepted all eight migrations in order; the second run
+applied zero. The Replit development database was not migrated: its health
+check confirms connectivity only, while the auth session endpoint reports a
+missing database relation. Render staging remains unconfigured, so a Render
+build, staging migration, and deployed health check are still open gates.
 
 ## Phase 3 — Independent identity, sessions, and authorization
 
@@ -275,7 +276,7 @@ implementing it.
 | Trips | `POST /api/trips/manage`; `POST /api/trips/location`; `POST /api/trips/attendance` | Verify active trip and driver assignment; validate coordinates/times; reject ended-trip GPS |
 | Parent | `GET /api/parent/location` | Verify guardian/student relationship; return authorized latest location and staleness |
 | Platform | `GET /api/platform/overview`; `POST /api/platform/school-status`; `POST /api/platform/billing-plan`; `POST /api/platform/bootstrap` | Platform-admin-only; do not expose school/student data to ordinary school roles |
-| Billing | `POST /api/billing/checkout`; `POST /api/webhooks/razorpay` | School-level subscription; server-side provider validation; verified, idempotent events |
+| Billing | `POST /api/billing/checkout`; `POST /api/billing/verify`; `POST /api/webhooks/razorpay` | School-level subscription; server-side provider validation; verified, idempotent events |
 
 For every route:
 
@@ -389,8 +390,9 @@ configuration explicitly.
 
 - Repository: existing GitHub repository.
 - Root directory: repository root.
-- Migration branch: `migration/render-deployment` during validation; move to
-  `main` only after review and explicit approval.
+- Development/staging branch: `van-tracker` in the current `render.yaml`.
+  Change both service branch settings together if the development branch is
+  renamed. Do not point the Blueprint at `main` until review and approval.
 - Build command: `npm ci`.
 - Start command: `npm start`.
 - Health-check path: `/health`.
@@ -403,13 +405,12 @@ configuration explicitly.
 **Frontend Static Site**
 
 - Repository and validation branch: same as backend.
-- Publish directory: `public`.
-- Build command: empty if the existing frontend remains plain static
-  HTML/CSS/JavaScript.
+- Build command: `npm ci && npm run build:static`.
+- Publish directory: `dist`.
 - Set the selected public API URL using the documented frontend configuration
   mechanism.
-- Add a fallback only if required by the existing page routes; do not impose an
-  SPA rewrite that breaks `login.html` or other direct page paths.
+- Keep the `/login` to `/login.html` rewrite and do not impose a broad SPA
+  fallback that masks missing files.
 
 **PostgreSQL**
 
@@ -470,7 +471,7 @@ and database dumps while allowing `.env.example`.
 
 Run and record the outcome of each step:
 
-1. Initialize the staging database and apply all seven current migrations in
+1. Initialize the staging database and apply all eight current migrations in
    order.
 2. Bootstrap exactly one Super Admin using the documented secure process.
 3. Sign in, refresh, and sign out.
@@ -532,8 +533,9 @@ reviewed plan, and approval.
 
 ## Product limitations and open risks
 
-- **Source behavior is not yet audited.** The route list and replacement design
-  must be checked against the actual handlers and frontend before implementation.
+- **Live Hatchable behavior is not confirmed.** The repository source audit is
+  complete, but platform-provided routing, auth, and production data behavior
+  still need confirmation against an authorized Hatchable environment.
 - **Email sign-in needs a real provider.** Production authentication cannot be
   claimed complete without provider setup and end-to-end verification.
 - **Legacy identity mapping may block data transfer.** Access to identity

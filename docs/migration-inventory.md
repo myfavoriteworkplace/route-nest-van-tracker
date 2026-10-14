@@ -32,7 +32,8 @@ original audit baseline. For current migration progress, see the
 - `public/saas.css` styles the current SaaS workspace/login views.
   `public/style.css` is loaded by the current index page but contains the
   separate demo dashboard's styling.
-- `migrations/` contains six SQL files, ordered `0001`–`0006`.
+- `migrations/` contained six imported SQL files, ordered `0001`–`0006`; later
+  migration work added `0007` and `0008`.
 - There is no root `package.json`, lockfile, test directory, conventional
   server entry point, or migration runner in the inspected repository.
 - `.replit` declares Node.js 20 and web modules but does not supply an

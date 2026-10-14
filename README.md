@@ -6,20 +6,20 @@ standard Node.js/Express and PostgreSQL application for Render.
 
 ## Current migration status
 
-The Express server, PostgreSQL connection pool, readiness endpoints, and
-versioned SQL migration runner are in place. The local migration path has been
-verified: all seven migrations applied to a temporary PostgreSQL database, a
-repeat run applied none, and all six automated tests pass. Independent
-authentication modules and their schema were added, but they are not yet
-connected to the Express app. Existing Hatchable login and business API
-handlers have **not** been migrated. The app is not ready for Render staging
-or production. The lockfile now uses public npm registry URLs and `npm ci`
-succeeds in Replit; a clean Render build has not yet been run.
+The Express server, PostgreSQL pool, readiness endpoints, versioned migration
+runner, independent email-auth routes, and converted business API are in place.
+The dashboard now uses the application session and CSRF-protected API client.
+The root `render.yaml` and [Render build/deployment guide](docs/render-deployment.md)
+describe a split Static Site and Web Service deployment. No Render database or
+services have been created, and no Hatchable production data has been moved.
+Staging authentication, tenant-isolation, billing, and full user journeys still
+need end-to-end verification before production use.
 
 See:
 
 - [Hatchable-to-Render migration plan](docs/hatchable-to-render-migration.md)
 - [Source audit and route/schema inventory](docs/migration-inventory.md)
+- [Render build commands, environment, and deployment configuration](docs/render-deployment.md)
 
 ## Local development
 
@@ -27,8 +27,8 @@ Requirements: Node.js 20 and a PostgreSQL database.
 
 1. Install the exact locked dependencies with `npm ci`.
 2. For local development outside Replit, copy `.env.example` to `.env` and set
-   `DATABASE_URL` to a development PostgreSQL database. Keep real credentials
-   out of source control.
+   `DATABASE_URL` and a unique `SESSION_SECRET` (at least 32 bytes). Keep real
+   credentials out of source control.
 3. Apply the existing schema with `npm run db:migrate`.
 4. Start the app with `npm run dev` (or `npm start`).
 5. Run the automated checks with `npm test`.
@@ -45,9 +45,11 @@ it does not reset or delete data.
 
 ## Important migration boundaries
 
-- Existing `api/` handlers and browser authentication still depend on Hatchable.
 - No Render database has been configured or migrated by this code. The lockfile
-  is portable, but dependency installation on Render is not yet verified.
+  uses public npm registry URLs; a clean Render build and staging deployment
+  still need to be verified.
+- Production sign-in requires a real email provider, and production billing
+  requires configured Razorpay plans, credentials, and webhook validation.
 - Do not point the migration runner at the current Hatchable production database
   or a Render production database until the migration and data-transfer plan is
   reviewed and explicitly approved.

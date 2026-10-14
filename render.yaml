@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: route-nest-api-dev
+    runtime: node
+    branch: van-tracker
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: AUTH_CODE_PEPPER
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: route-nest-web-dev
+          property: host
+
+  - type: web
+    name: route-nest-web-dev
+    runtime: static
+    branch: van-tracker
+    buildCommand: npm ci && npm run build:static
+    staticPublishPath: dist
+    envVars:
+      - key: API_BASE_URL
+        fromService:
+          type: web
+          name: route-nest-api-dev
+          property: host
+    routes:
+      - type: rewrite
+        source: /login
+        destination: /login.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Permissions-Policy
+        value: "geolocation=(self), camera=(), microphone=()"
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://route-nest-api-dev.onrender.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
