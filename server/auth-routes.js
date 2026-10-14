@@ -1,13 +1,19 @@
 const crypto = require("node:crypto");
 const express = require("express");
 
-function createAuthRouter({ authService, cookieName, cookieOptions }) {
+function createAuthRouter({
+  authService,
+  cookieName,
+  cookieOptions,
+  csrfProtection,
+}) {
   const router = express.Router();
 
   router.get("/csrf", (req, res, next) => {
     if (!req.session.csrfToken) {
       req.session.csrfToken = crypto.randomBytes(32).toString("base64url");
     }
+    res.set("Cache-Control", "no-store");
     req.session.save((error) => {
       if (error) return next(error);
       return res.json({ csrfToken: req.session.csrfToken });
@@ -34,7 +40,7 @@ function createAuthRouter({ authService, cookieName, cookieOptions }) {
     }
   });
 
-  router.post("/request-code", async (req, res, next) => {
+  router.post("/request-code", csrfProtection, async (req, res, next) => {
     try {
       await authService.requestCode(req.body?.email, req.ip);
       return res.status(202).json({
@@ -45,7 +51,7 @@ function createAuthRouter({ authService, cookieName, cookieOptions }) {
     }
   });
 
-  router.post("/verify-code", async (req, res, next) => {
+  router.post("/verify-code", csrfProtection, async (req, res, next) => {
     try {
       const user = await authService.verifyCode(
         req.body?.email,
@@ -57,17 +63,18 @@ function createAuthRouter({ authService, cookieName, cookieOptions }) {
         req.session.regenerate((error) => (error ? reject(error) : resolve()));
       });
       req.session.userId = user.id;
+      req.session.csrfToken = crypto.randomBytes(32).toString("base64url");
       await new Promise((resolve, reject) => {
         req.session.save((error) => (error ? reject(error) : resolve()));
       });
 
-      return res.json({ user });
+      return res.json({ user, csrfToken: req.session.csrfToken });
     } catch (error) {
       return next(error);
     }
   });
 
-  router.post("/logout", (req, res, next) => {
+  router.post("/logout", csrfProtection, (req, res, next) => {
     if (!req.session) {
       res.clearCookie(cookieName, cookieOptions);
       return res.sendStatus(204);

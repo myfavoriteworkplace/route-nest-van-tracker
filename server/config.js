@@ -9,6 +9,29 @@ function readInteger(env, name, fallback, min, max) {
   return value;
 }
 
+function readOrigin(env, name) {
+  const raw = env[name];
+  if (!raw) return null;
+
+  let url;
+  try {
+    url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+  } catch {
+    throw new Error(`${name} must be a valid HTTP or HTTPS origin.`);
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(`${name} must be a valid HTTP or HTTPS origin.`);
+  }
+  return url.origin;
+}
+
 function loadConfig(env = process.env) {
   const sessionSecret = env.SESSION_SECRET;
   if (!sessionSecret || Buffer.byteLength(sessionSecret, "utf8") < 32) {
@@ -21,6 +44,7 @@ function loadConfig(env = process.env) {
   return {
     nodeEnv,
     sessionSecret,
+    frontendUrl: readOrigin(env, "FRONTEND_URL"),
     sessionMaxAgeSeconds: readInteger(
       env,
       "SESSION_MAX_AGE_SECONDS",
@@ -79,9 +103,13 @@ function loadConfig(env = process.env) {
       0,
       5,
     ),
+    platformBootstrapKey: env.PLATFORM_BOOTSTRAP_KEY || null,
+    razorpayKeyId: env.RAZORPAY_KEY_ID || null,
+    razorpayKeySecret: env.RAZORPAY_KEY_SECRET || null,
+    razorpayWebhookSecret: env.RAZORPAY_WEBHOOK_SECRET || null,
     resendApiKey: env.RESEND_API_KEY || null,
     emailFrom: env.EMAIL_FROM || null,
   };
 }
 
-module.exports = { loadConfig, readInteger };
+module.exports = { loadConfig, readInteger, readOrigin };

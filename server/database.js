@@ -41,6 +41,27 @@ async function checkDatabase() {
   await getPool().query("SELECT 1");
 }
 
+async function withTransaction(pool, callback) {
+  const client = await pool.connect();
+  let transactionStarted = false;
+
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    const result = await callback(client);
+    await client.query("COMMIT");
+    transactionStarted = false;
+    return result;
+  } catch (error) {
+    if (transactionStarted) {
+      await client.query("ROLLBACK").catch(() => {});
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function closePool() {
   if (pool) {
     const currentPool = pool;
@@ -49,4 +70,10 @@ async function closePool() {
   }
 }
 
-module.exports = { checkDatabase, closePool, getPool, getPoolOptions };
+module.exports = {
+  checkDatabase,
+  closePool,
+  getPool,
+  getPoolOptions,
+  withTransaction,
+};
