@@ -13,27 +13,33 @@ Hatchable with explicit application-owned services. Do not rewrite the product
 from scratch, deploy the current unconverted source as if it were ready, or
 modify/delete the existing Hatchable project or its data.
 
-### Current progress — 2026-10-13
+### Current progress — 2026-10-14
 
 - **Phase 1 (source audit): complete.** See
   [`migration-inventory.md`](migration-inventory.md) for the original API,
   authentication, frontend, and schema inventory.
-- **Phase 2 (Node.js/PostgreSQL foundation): implemented and locally checked.**
+- **Phase 2 (Node.js/PostgreSQL foundation): implemented and locally validated.**
   The repository now has a Node 20 package manifest and lockfile, an Express
   server, bounded `pg` pool, readiness endpoints, static-file hosting, and an
   explicit transactional migration runner with a migration ledger, checksums,
-  and an advisory lock. Automated checks currently pass (6 tests).
+  and an advisory lock. `npm ci` succeeds in this Replit workspace and all six
+  automated tests pass. On a fresh temporary local PostgreSQL instance, all
+  seven migrations applied in order; a second run applied none.
 - The workspace's preconfigured **Replit development PostgreSQL** answered a
   read-only `SELECT 1` readiness check. It is not the intended Render database;
-  no schema migrations were run against it.
+  no schema migrations were run against it. The Replit app's `/health` endpoint
+  also returned ready. The same endpoint returned ready when the app used the
+  temporary local PostgreSQL instance.
 - **Still blocked on target configuration:** a Render PostgreSQL instance and
-  its `DATABASE_URL` have not been supplied. Therefore the existing six SQL
-  migrations have not been applied or verified against the intended Render
-  database.
+  its `DATABASE_URL` have not been supplied. The seven current migrations have
+  not been applied or verified against the intended Render database.
 - The generated package lock currently contains Replit package-firewall
-  download URLs. A clean dependency install on Render has not been tested; make
-  the lock/build configuration portable before treating a Render build as
-  verified.
+  download URLs. The clean install succeeded inside Replit, but portability and
+  a clean dependency install on Render have not been verified; make the
+  lock/build configuration portable before treating a Render build as verified.
+- Migration 0007 and independent email-auth modules have been added, but the
+  Express app does not mount the auth routes or configure sessions, and the
+  Hatchable-backed login and business API have not been converted.
 - The existing login contains inline JavaScript, so Helmet's Content Security
   Policy is temporarily disabled while its other default security headers are
   enabled. Revisit the policy after replacing Hatchable auth. The current
@@ -51,7 +57,8 @@ The imported repository currently contains:
 - `api/`: individual API handlers, including school, trip, parent, platform,
   billing, and webhook handlers.
 - `lib/tenant.js`: tenant-related helper code.
-- `migrations/`: six SQL migrations.
+- `migrations/`: six imported SQL migrations; `0007_application_auth.sql` was
+  added later during the Express conversion.
 - `hatchable.toml`: Hatchable auth and secret declarations.
 - `README.md`: Hatchable-oriented project instructions.
 
@@ -180,13 +187,16 @@ be reached, migrations run against a disposable database, and `/health`
 reflects readiness. A missing required variable fails clearly without printing
 its value.
 
-**Implementation update:** The local application and unit checks are in place.
-`npm test` passes 6 tests, the server starts on `0.0.0.0:$PORT`, and the
-workspace PostgreSQL readiness query succeeded. That connection is the
-Replit-managed development database, not Render PostgreSQL, and it was only
-used for `SELECT 1`. The six project migrations were not run. The Phase 2 gate
-remains open until the runner is validated against a disposable PostgreSQL
-database and the intended Render database is explicitly configured.
+**Implementation update (2026-10-14):** `npm ci` succeeds in the Replit
+workspace and `npm test` passes all 6 tests. Against a newly initialized,
+temporary local PostgreSQL instance, `npm run db:migrate` applied all 7 current
+migrations in order; a second run applied 0, and the ledger contained all 7.
+The Replit app's `/health` endpoint returned ready using the existing
+Replit-managed development database; no schema migrations were run against that
+database. `/health` also returned ready against the temporary local PostgreSQL
+instance. The local disposable-database gate is now validated. Render staging
+remains unconfigured, and the package lock still contains Replit-internal
+download URLs, so Render install and database verification remain open.
 
 ## Phase 3 — Independent identity, sessions, and authorization
 
@@ -431,7 +441,7 @@ logs, coverage output, temporary files, and database dumps while allowing
 
 Run and record the outcome of each step:
 
-1. Initialize the staging database and apply all six existing migrations in
+1. Initialize the staging database and apply all seven current migrations in
    order.
 2. Bootstrap exactly one Super Admin using the documented secure process.
 3. Sign in, refresh, and sign out.

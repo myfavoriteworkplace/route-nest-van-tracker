@@ -1,0 +1,1 @@
+- [Temporary PostgreSQL checks](temporary-postgres-checks.md) — use a cluster-local socket directory; this runtime lacks the default `/run/postgresql`.
