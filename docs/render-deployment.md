@@ -9,12 +9,33 @@ created automatically by `render.yaml`.
 ## Service layout
 
 The Blueprint at the repository root defines two services, both pinned to the
-`van-tracker` development branch:
+`van-tracker` development branch. If entering these settings manually in
+Render, leave **Root Directory** blank so commands run from the repository
+root.
 
-| Service | Render type | Build command | Start/publish setting |
-| --- | --- | --- | --- |
-| `route-nest-api-dev` | Node.js Web Service | `npm ci` | `npm start`; health check `/health` |
-| `route-nest-web-dev` | Static Site | `npm ci && npm run build:static` | Publish directory `dist` |
+### Backend — `route-nest-api-dev`
+
+| Render setting | Value |
+| --- | --- |
+| Service type | Web Service |
+| Runtime | Node |
+| Branch | `van-tracker` |
+| Root Directory | Leave blank (repository root) |
+| Build Command | `npm ci` |
+| Start Command | `npm start` |
+| Health Check Path | `/health` |
+| Publish Directory | Not applicable to a Web Service |
+
+### Frontend — `route-nest-web-dev`
+
+| Render setting | Value |
+| --- | --- |
+| Service type | Static Site |
+| Branch | `van-tracker` |
+| Root Directory | Leave blank (repository root) |
+| Build Command | `npm ci && npm run build:static` |
+| Publish Directory | `dist` |
+| Start Command | Not applicable to a Static Site |
 
 The static build copies `public/` into `dist/` and writes the public
 `API_BASE_URL` into `runtime-config.js`. Do not put credentials or secrets in
