@@ -13,7 +13,8 @@ repeat run applied none, and all six automated tests pass. Independent
 authentication modules and their schema were added, but they are not yet
 connected to the Express app. Existing Hatchable login and business API
 handlers have **not** been migrated. The app is not ready for Render staging
-or production.
+or production. The lockfile now uses public npm registry URLs and `npm ci`
+succeeds in Replit; a clean Render build has not yet been run.
 
 See:
 
@@ -24,7 +25,7 @@ See:
 
 Requirements: Node.js 20 and a PostgreSQL database.
 
-1. Install dependencies with `npm install`.
+1. Install the exact locked dependencies with `npm ci`.
 2. For local development outside Replit, copy `.env.example` to `.env` and set
    `DATABASE_URL` to a development PostgreSQL database. Keep real credentials
    out of source control.
@@ -46,8 +47,7 @@ it does not reset or delete data.
 
 - Existing `api/` handlers and browser authentication still depend on Hatchable.
 - No Render database has been configured or migrated by this code. The lockfile
-  also contains Replit package-firewall URLs, so dependency installation on
-  Render is not yet verified.
+  is portable, but dependency installation on Render is not yet verified.
 - Do not point the migration runner at the current Hatchable production database
   or a Render production database until the migration and data-transfer plan is
   reviewed and explicitly approved.

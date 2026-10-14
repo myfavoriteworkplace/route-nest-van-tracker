@@ -1,1 +1,2 @@
 - [Temporary PostgreSQL checks](temporary-postgres-checks.md) — use a cluster-local socket directory; this runtime lacks the default `/run/postgresql`.
+- [Portable npm lockfiles](portable-npm-lockfiles.md) — keep Render-bound lockfiles on public registry URLs and verify with a clean install.

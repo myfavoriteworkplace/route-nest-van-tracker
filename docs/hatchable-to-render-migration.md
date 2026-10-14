@@ -33,10 +33,9 @@ modify/delete the existing Hatchable project or its data.
 - **Still blocked on target configuration:** a Render PostgreSQL instance and
   its `DATABASE_URL` have not been supplied. The seven current migrations have
   not been applied or verified against the intended Render database.
-- The generated package lock currently contains Replit package-firewall
-  download URLs. The clean install succeeded inside Replit, but portability and
-  a clean dependency install on Render have not been verified; make the
-  lock/build configuration portable before treating a Render build as verified.
+- The lockfile now uses public npm registry tarball URLs rather than
+  Replit-internal package-firewall URLs, and `npm ci` succeeds in this workspace.
+  A clean Render build has not yet been run.
 - Migration 0007 and independent email-auth modules have been added, but the
   Express app does not mount the auth routes or configure sessions, and the
   Hatchable-backed login and business API have not been converted.
@@ -154,6 +153,10 @@ PostgreSQL access and safe schema migrations.
 - Add a root `package.json` and committed lockfile with a stable Node.js engine,
   compatible maintained packages, and `start`, `dev`, `test`, and `db:migrate`
   scripts.
+- Keep lockfile tarball URLs portable: never commit
+  `package-firewall.replit.internal` URLs. After dependency changes, check the
+  lockfile for internal hosts and run `npm ci`; an in-Replit install does not
+  replace a clean Render build check.
 - Add an Express server that listens on `0.0.0.0` and `process.env.PORT`.
 - Configure JSON/form parsing, security headers, request logging that excludes
   sensitive values, route registration, and centralized error handling.
@@ -187,16 +190,17 @@ be reached, migrations run against a disposable database, and `/health`
 reflects readiness. A missing required variable fails clearly without printing
 its value.
 
-**Implementation update (2026-10-14):** `npm ci` succeeds in the Replit
-workspace and `npm test` passes all 6 tests. Against a newly initialized,
+**Implementation update (2026-10-14):** The lockfile uses public npm registry
+URLs, `npm ci` succeeds in the Replit workspace, and `npm test` passes all 6
+tests. Against a newly initialized,
 temporary local PostgreSQL instance, `npm run db:migrate` applied all 7 current
 migrations in order; a second run applied 0, and the ledger contained all 7.
 The Replit app's `/health` endpoint returned ready using the existing
 Replit-managed development database; no schema migrations were run against that
 database. `/health` also returned ready against the temporary local PostgreSQL
 instance. The local disposable-database gate is now validated. Render staging
-remains unconfigured, and the package lock still contains Replit-internal
-download URLs, so Render install and database verification remain open.
+remains unconfigured, and a clean install/build on Render has not yet been
+tested, so staging verification remains open.
 
 ## Phase 3 — Independent identity, sessions, and authorization
 
@@ -390,10 +394,11 @@ configuration explicitly.
 - Build command: `npm ci`.
 - Start command: `npm start`.
 - Health-check path: `/health`.
-- Set `NODE_ENV=production`.
-- Set `DATABASE_URL` from the Render PostgreSQL service using the appropriate
-  internal connection information.
-- Configure remaining secret values securely in Render, not in Git.
+- Set the backend variables listed in the inventory below. Put secrets in
+  Render's environment settings, never in Git, logs, static-site variables, or
+  browser code.
+- Use the PostgreSQL service's internal connection URL for `DATABASE_URL`.
+- Do not set `PORT` manually; Render supplies it.
 
 **Frontend Static Site**
 
@@ -415,27 +420,51 @@ configuration explicitly.
 
 ### Environment-variable inventory
 
-The final `.env.example` should contain placeholder names and descriptions,
-never usable credentials. Likely variables include:
+The table is the complete environment-variable inventory for the planned
+Render deployment. Some entries are only required after their migration phase
+is implemented; do not enable sign-in, bootstrap, or billing until its required
+values are configured. The current foundation reads `PORT` and `DATABASE_URL`;
+wire and validate the remaining variables as their features are connected.
+Required secrets belong only on the backend Web Service. The Static Site must
+not receive database, session, email-provider, bootstrap, or Razorpay secrets.
 
-| Variable | Purpose |
-| --- | --- |
-| `NODE_ENV` | Runtime mode |
-| `PORT` | HTTP listen port; supplied by Render |
-| `DATABASE_URL` | PostgreSQL connection |
-| `SESSION_SECRET` | Server-side session signing |
-| `FRONTEND_URL` | Exact allowed frontend origin |
-| `API_BASE_URL` | Public API URL if needed by static frontend configuration |
-| `PLATFORM_BOOTSTRAP_KEY` | One-time initial platform-admin bootstrap |
-| `RAZORPAY_KEY_ID` | Server-configured Razorpay key identifier |
-| `RAZORPAY_KEY_SECRET` | Server-only Razorpay secret |
-| `RAZORPAY_WEBHOOK_SECRET` | Server-only webhook verification secret |
-| Email-provider settings | Required by the selected production sign-in provider |
+| Variable | Render service | Requirement and use |
+| --- | --- | --- |
+| `NODE_ENV` | Backend Web Service | Set to `production`. |
+| `PORT` | Backend Web Service | Supplied by Render; do not set manually. |
+| `DATABASE_URL` | Backend Web Service | Required. Use the staging PostgreSQL service's internal URL; never expose it to the Static Site. |
+| `DB_POOL_MAX` | Backend Web Service | Optional; defaults to `8`, valid range `1`–`50`. Adjust to the database connection limit. |
+| `SESSION_SECRET` | Backend Web Service | Required when server sessions are enabled; at least 32 bytes. Keep secret. |
+| `SESSION_MAX_AGE_SECONDS` | Backend Web Service | Optional; defaults to `604800`, valid range `300`–`2592000`. |
+| `AUTH_CODE_PEPPER` | Backend Web Service | Required for email-code authentication; at least 32 bytes. Keep secret. |
+| `AUTH_CODE_TTL_SECONDS` | Backend Web Service | Optional; defaults to `600`, valid range `60`–`1800`. |
+| `AUTH_CODE_MAX_ATTEMPTS` | Backend Web Service | Optional; defaults to `5`, valid range `1`–`10`. |
+| `AUTH_RATE_LIMIT_WINDOW_SECONDS` | Backend Web Service | Optional; defaults to `900`, valid range `60`–`86400`. |
+| `AUTH_REQUEST_LIMIT_PER_EMAIL` | Backend Web Service | Optional; defaults to `3`, valid range `1`–`20`. |
+| `AUTH_REQUEST_LIMIT_PER_IP` | Backend Web Service | Optional; defaults to `30`, valid range `1`–`500`. |
+| `AUTH_VERIFY_LIMIT_PER_EMAIL` | Backend Web Service | Optional; defaults to `10`, valid range `1`–`100`. |
+| `AUTH_VERIFY_LIMIT_PER_IP` | Backend Web Service | Optional; defaults to `60`, valid range `1`–`1000`. |
+| `TRUST_PROXY_HOPS` | Backend Web Service | Optional; defaults to `1` in production, valid range `0`–`5`. Match the actual proxy chain when Express proxy handling is wired. |
+| `RESEND_API_KEY` | Backend Web Service | Required when Resend email sign-in is enabled. Keep secret. |
+| `EMAIL_FROM` | Backend Web Service | Required with Resend; use a sender verified by the email provider. |
+| `FRONTEND_URL` | Backend Web Service | Required for a split frontend/API deployment; exact Static Site origin for the CORS allowlist. |
+| `API_BASE_URL` | Static Site | Public API origin only if the frontend and API are split and the frontend client is configured to use it. Do not place secrets here. |
+| `PLATFORM_BOOTSTRAP_KEY` | Backend Web Service | Temporary secret for the one-time initial Super Admin claim; remove it after bootstrap. |
+| `RAZORPAY_KEY_ID` | Backend Web Service | Required only when Razorpay billing is enabled; backend only. |
+| `RAZORPAY_KEY_SECRET` | Backend Web Service | Required only when Razorpay billing is enabled. Keep secret and backend-only. |
+| `RAZORPAY_WEBHOOK_SECRET` | Backend Web Service | Required only when signed Razorpay webhooks are enabled. Keep secret and backend-only. |
+
+Monthly and annual Razorpay Plan IDs are stored in the `plans` database row
+through platform-admin configuration; they are not Render environment
+variables. `FRONTEND_URL` and `API_BASE_URL` are only needed if the selected
+deployment uses separate hostnames. For a single-origin deployment, omit them
+unless the implemented configuration specifically requires them.
 
 Validate mandatory settings at startup and report missing *names*, never
-secret values. `.gitignore` must exclude `.env`, local secrets, dependencies,
-logs, coverage output, temporary files, and database dumps while allowing
-`.env.example`.
+secret values. `.env.example` should list the variable names and safe
+placeholders/descriptions, never usable credentials. `.gitignore` must exclude
+`.env`, local secrets, dependencies, logs, coverage output, temporary files,
+and database dumps while allowing `.env.example`.
 
 ### Manual staging acceptance checklist
 
